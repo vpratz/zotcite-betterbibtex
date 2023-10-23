@@ -241,6 +241,15 @@ class ZoteroEntries:
                 self._errmsg('Please, check if $ZoteroSQLpath is correct: "' + str(os.getenv('ZoteroSQLpath')) + '" not found.')
                 return None
 
+        # Path to better-bibtex-search.sqlite
+        self._use_bbt = False
+        if os.getenv('BetterBibtexSearchSQLpath') is not None:
+            if os.path.isfile(os.path.expanduser(str(os.getenv('BetterBibtexSearchSQLpath')))):
+                self._b = os.path.expanduser(str(os.getenv('BetterBibtexSearchSQLpath')))
+                self._use_bbt = True
+            else:
+                self._errmsg('Please, check if $BetterBibtexSearchSQLpath is correct: "' + str(os.getenv('BetterBibtexSearchSQLpath')) + '" not found.')
+
         # Temporary directory
         if os.getenv('Zotcite_tmpdir') is None:
             if os.getenv('XDG_CACHE_HOME') and os.path.isdir(str(os.getenv('XDG_CACHE_HOME'))):
@@ -383,20 +392,48 @@ class ZoteroEntries:
             self._c[item_collection].append(item_id)
 
     def _add_most_fields(self):
-        query = u"""
-            SELECT items.itemID, items.key, fields.fieldName, itemDataValues.value
-            FROM items, itemData, fields, itemDataValues
-            WHERE
-                items.itemID = itemData.itemID
-                and itemData.fieldID = fields.fieldID
-                and itemData.valueID = itemDataValues.valueID
-            """
-        self._e = {}
-        self._cur.execute(query)
-        for item_id, item_key, field, value in self._cur.fetchall():
-            if item_id not in self._e:
-                self._e[item_id] = {'zotkey': item_key, 'alastnm': ''}
-            self._e[item_id][field] = value
+        if self._use_bbt:
+            bbt_query = f'ATTACH DATABASE "{self._b}" as bbt'
+            self._cur.execute(bbt_query)
+            print(bbt_query)
+            query = """
+                SELECT items.itemID, items.key, fields.fieldName, itemDataValues.value, bbt.citekeys.citekey
+                FROM items, itemData, fields, itemDataValues, bbt.citekeys
+                WHERE
+                    items.itemID = itemData.itemID
+                    and itemData.fieldID = fields.fieldID
+                    and itemData.valueID = itemDataValues.valueID
+                    and bbt.citekeys.itemKey = items.key
+                """
+            self._e = {}
+            self._cur.execute(query)
+            for item_id, item_key, field, value, citekey in self._cur.fetchall():
+                if item_id not in self._e:
+                    self._e[item_id] = {
+                        "zotkey": item_key,
+                        "alastnm": "",
+                        "citekey": citekey,
+                    }
+                self._e[item_id][field] = value
+        else:
+            query = """
+                SELECT items.itemID, items.key, fields.fieldName, itemDataValues.value
+                FROM items, itemData, fields, itemDataValues
+                WHERE
+                    items.itemID = itemData.itemID
+                    and itemData.fieldID = fields.fieldID
+                    and itemData.valueID = itemDataValues.valueID
+                """
+            self._e = {}
+            self._cur.execute(query)
+            for item_id, item_key, field, value in self._cur.fetchall():
+                if item_id not in self._e:
+                    self._e[item_id] = {
+                        "zotkey": item_key,
+                        "alastnm": "",
+                    }
+                self._e[item_id][field] = value
+
 
     def _add_authors(self):
         query = u"""
@@ -479,6 +516,8 @@ class ZoteroEntries:
             else:
                 self._e[k]['title'] = ''
                 titlew = ''
+            if 'citekey' in self._e[k]:
+                continue
             lastname = 'No_author'
             lastnames = ''
             creators = ['author'] + self._creators
@@ -533,15 +572,16 @@ class ZoteroEntries:
         lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
         self._errmsg("Zotcite error: " + "".join(line for line in lines))
 
-    @classmethod
-    def _get_compl_line(cls, e):
+    # @classmethod
+    def _get_compl_line(self, e):
         alastnm = e['alastnm']
+        key = e['citekey'] if self._use_bbt else e['zotkey'] + '#' + e['citekey']
         if alastnm == '':
-            lst = [e['zotkey'] + '#' + e['citekey'], '', '(' + e['year'] + ') ' + e['title']]
+            lst = [key, '', '(' + e['year'] + ') ' + e['title']]
         else:
             if len(alastnm) > 40:
                 alastnm = alastnm[:40] + "…"
-            lst = [e['zotkey'] + '#' + e['citekey'], alastnm , '(' + e['year'] + ') ' + e['title']]
+            lst = [key, alastnm , '(' + e['year'] + ') ' + e['title']]
         return lst
 
     @staticmethod
@@ -660,7 +700,7 @@ class ZoteroEntries:
         for e in self._e:
             for k in keys:
                 zotkey = re.sub('#.*', '', k)
-                if zotkey == self._e[e]['zotkey']:
+                if zotkey in [self._e[e]['zotkey'], self._e[e]['citekey']]:
                     ref += self._get_yaml_ref(self._e[e], k)
         if ref != '':
             ref = 'references:\n' + ref
@@ -743,8 +783,8 @@ class ZoteroEntries:
         ref = {}
         for e in self._e:
             for k in keys:
-                zotkey = re.sub('#.*', '', k)
-                if zotkey == self._e[e]['zotkey']:
+                zotkey = re.sub("#.*", "", k)
+                if zotkey in [self._e[e]['zotkey'], self._e[e]['citekey']]:
                     ref[zotkey] = self._get_bib_ref(self._e[e], k)
         return ref
 
@@ -768,7 +808,7 @@ class ZoteroEntries:
         """
 
         for k in self._e:
-            if self._e[k]['zotkey'] == zotkey:
+            if zotkey in [self._e[k]['zotkey'], self._e[k]['citekey']]:
                 return self._e[k]
         return {}
 
@@ -802,8 +842,8 @@ class ZoteroEntries:
 
         citekey = ''
         for k in self._e:
-            if self._e[k]['zotkey'] == key:
-                citekey = self._e[k]['citekey']
+            if key in [self._e[k]['zotkey'], self._e[k]['citekey']]:
+                citekey = self._e[k]["citekey"]
 
         notes = []
         for i in cur.fetchall():
@@ -875,7 +915,7 @@ class ZoteroEntries:
             k = re.sub('\002', '', k)
             r = 'NotFound'
             for i in self._e:
-                if self._e[i]['zotkey'] == k:
+                if k in [self._e[i]['zotkey'], self._e[i]['citekey']]:
                     r = self._e[i]['citekey']
             return '\001' + k + '#' + r + '; '
 

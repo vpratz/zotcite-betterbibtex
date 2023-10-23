@@ -395,7 +395,6 @@ class ZoteroEntries:
         if self._use_bbt:
             bbt_query = f'ATTACH DATABASE "{self._b}" as bbt'
             self._cur.execute(bbt_query)
-            print(bbt_query)
             query = """
                 SELECT items.itemID, items.key, fields.fieldName, itemDataValues.value, bbt.citekeys.citekey
                 FROM items, itemData, fields, itemDataValues, bbt.citekeys

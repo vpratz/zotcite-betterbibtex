@@ -21,8 +21,8 @@ except ImportError:
     sys.stdout.write("Please, install the Python3 module popplerqt5")
     sys.exit(1)
 
-def main():
 
+def main():
     doc = popplerqt5.Poppler.Document.load(sys.argv[1])
     if doc is None:
         sys.exit(33)
@@ -30,7 +30,7 @@ def main():
     if len(sys.argv) > 2:
         citekey = sys.argv[2]
     else:
-        citekey = ''
+        citekey = ""
 
     # Sometimes, the page labels are spurious. So the priority is:
     # 1. given page range; 2. page label; 3. given starting page.
@@ -50,10 +50,10 @@ def main():
         else:
             page1 = int(sys.argv[3])
 
-    if os.getenv('ZYearPageSep') is None:
-        ypsep = ', p. '
+    if os.getenv("ZYearPageSep") is None:
+        ypsep = ", p. "
     else:
-        ypsep = os.getenv('ZYearPageSep')
+        ypsep = os.getenv("ZYearPageSep")
 
     notes = []
 
@@ -84,12 +84,12 @@ def main():
                     y = a.boundary().topRight().y()
 
                     if a.contents():
-                        txt = a.contents() + ' [annotation'
+                        txt = a.contents() + " [annotation"
                         if a.author():
-                            txt = txt + ' by ' + a.author()
+                            txt = txt + " by " + a.author()
                         if citekey:
-                            txt = txt + ' on ' + citekey
-                        txt = txt + ypsep + pgnum + ']\n'
+                            txt = txt + " on " + citekey
+                        txt = txt + ypsep + pgnum + "]\n"
 
                         # Decrease the value of y to ensure that the comment
                         # on a highlighted text will be printed before the
@@ -98,25 +98,27 @@ def main():
 
                     if isinstance(a, popplerqt5.Poppler.HighlightAnnotation):
                         quads = a.highlightQuads()
-                        txt = ''
+                        txt = ""
                         for quad in quads:
-                            rect = (quad.points[0].x() * pwidth,
-                                    quad.points[0].y() * pheight,
-                                    quad.points[2].x() * pwidth,
-                                    quad.points[2].y() * pheight)
+                            rect = (
+                                quad.points[0].x() * pwidth,
+                                quad.points[0].y() * pheight,
+                                quad.points[2].x() * pwidth,
+                                quad.points[2].y() * pheight,
+                            )
                             bdy = PyQt5.QtCore.QRectF()
                             bdy.setCoords(*rect)
-                            txt = txt + str(page.text(bdy)) + '\n'
+                            txt = txt + str(page.text(bdy)) + "\n"
 
-                        txt = txt.replace('-\n', '')
-                        txt = txt.replace('\n', ' ')
-                        txt = re.sub('^ *', '', txt)
-                        txt = re.sub(' *$', '', txt)
+                        txt = txt.replace("-\n", "")
+                        txt = txt.replace("\n", " ")
+                        txt = re.sub("^ *", "", txt)
+                        txt = re.sub(" *$", "", txt)
                         if txt:
-                            txt = '> ' + txt + ' ['
+                            txt = "> " + txt + " ["
                             if citekey:
                                 txt = txt + citekey
-                            txt = txt + ypsep + pgnum + ']\n'
+                            txt = txt + ypsep + pgnum + "]\n"
                             notes.append([pnum, c, y, txt])
 
     if notes:
@@ -125,6 +127,7 @@ def main():
             print(n[3])
     else:
         sys.exit(34)
+
 
 if __name__ == "__main__":
     main()

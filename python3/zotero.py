@@ -3,8 +3,6 @@ import sys
 import os
 import re
 import sqlite3
-import copy
-import yaml
 import subprocess
 
 # A lot of code was either adapted or plainly copied from citation_vim,
@@ -17,193 +15,6 @@ import subprocess
 
 class ZoteroEntries:
     """Create an object storing all references from ~/Zotero/zotero.sqlite"""
-
-    # Conversion from zotero.sqlite to CSL types
-    _zct = {
-        "artwork": "graphic",
-        "audioRecording": "song",
-        "blogPost": "post-weblog",
-        "bookSection": "chapter",
-        "case": "legal_case",
-        "computerProgram": "book",
-        "conferencePaper": "paper-conference",
-        "dictionaryEntry": "entry-dictionary",
-        "document": "report",
-        "email": "personal_communication",
-        "encyclopediaArticle": "entry-encyclopedia",
-        "film": "motion_picture",
-        "forumPost": "post",
-        "hearing": "bill",
-        "instantMessage": "personal_communication",
-        "interview": "interview",
-        "journalArticle": "article-journal",
-        "letter": "personal_communication",
-        "magazineArticle": "article-magazine",
-        "newspaperArticle": "article-newspaper",
-        "note": "manuscript",
-        "podcast": "broadcast",
-        "presentation": "speech",
-        "radioBroadcast": "broadcast",
-        "statute": "legislation",
-        "tvBroadcast": "broadcast",
-        "videoRecording": "motion_picture",
-    }
-
-    # Conversion from zotero.sqlite to CSL fields
-    # It's incomplete and accuracy isn't guaranteed!
-    _zcf = {
-        "abstractNote": "abstract",
-        "accessDate": "accessed",
-        "applicationNumber": "call-number",
-        "archiveLocation": "archive_location",
-        "artworkMedium": "medium",
-        "artworkSize": "dimensions",
-        "audioFileType": "medium",
-        "blogTitle": "container-title",
-        "bookTitle": "container-title",
-        "callNumber": "call-number",
-        "code": "container-title",
-        "codeNumber": "volume",
-        "codePages": "page",
-        "codeVolume": "volume",
-        "conferenceName": "event",
-        "court": "authority",
-        "date": "issued",
-        "issueDate": "issued",
-        "dictionaryTitle": "container-title",
-        "distributor": "publisher",
-        "encyclopediaTitle": "container-title",
-        "extra": "note",
-        "filingDate": "submitted",
-        "forumTitle": "container-title",
-        "history": "references",
-        "institution": "publisher",
-        "interviewMedium": "medium",
-        "issuingAuthority": "authority",
-        "legalStatus": "status",
-        "legislativeBody": "authority",
-        "libraryCatalog": "source",
-        "meetingName": "event",
-        "numPages": "number-of-pages",
-        "numberOfVolumes": "number-of-volumes",
-        "pages": "page",
-        "place": "publisher-place",
-        "priorityNumbers": "issue",
-        "proceedingsTitle": "container-title",
-        "programTitle": "container-title",
-        "programmingLanguage": "genre",
-        "publicationTitle": "container-title",
-        "reporter": "container-title",
-        "reviewedAuthor": "reviewed-author",
-        "runningTime": "dimensions",
-        "series": "collection-title",
-        "seriesEditor": "collection-editor",
-        "seriesNumber": "collection-number",
-        "seriesTitle": "collection-title",
-        "session": "chapter-number",
-        "shortTitle": "title-short",
-        "system": "medium",
-        "thesisType": "genre",
-        "type": "genre",
-        "university": "publisher",
-        "url": "URL",
-        "versionNumber": "version",
-        "websiteTitle": "container-title",
-        "websiteType": "genre",
-    }
-
-    # Conversion from zotero.sqlite to bib types
-    _zbt = {
-        "artwork": "Misc",
-        "audioRecording": "Misc",
-        "blogPost": "Misc",
-        "book": "Book",
-        "bookSection": "InCollection",
-        "case": "Misc",
-        "computerProgram": "Book",
-        "conferencePaper": "InProceedings",
-        "dictionaryEntry": "InCollection",
-        "document": "TechReport",
-        "email": "Misc",
-        "encyclopediaArticle": "InCollection",
-        "film": "Misc",
-        "forumPost": "Misc",
-        "hearing": "Misc",
-        "instantMessage": "Misc",
-        "interview": "Misc",
-        "journalArticle": "Article",
-        "letter": "Misc",
-        "magazineArticle": "Article",
-        "newspaperArticle": "Article",
-        "note": "Misc",
-        "podcast": "Misc",
-        "presentation": "Misc",
-        "radioBroadcast": "Misc",
-        "statute": "Misc",
-        "thesis": "Thesis",
-        "tvBroadcast": "Misc",
-        "videoRecording": "Misc",
-    }
-
-    # Conversion from zotero.sqlite to bib fields
-    # It's incomplete and accuracy isn't guaranteed!
-    _zbf = {
-        "abstractNote": "abstract",
-        "accessDate": "urldate",
-        "applicationNumber": "call-number",
-        "archiveLocation": "archive_location",
-        "artworkMedium": "medium",
-        "artworkSize": "dimensions",
-        "attachment": "file",
-        "audioFileType": "medium",
-        "blogTitle": "booktitle",
-        "bookTitle": "booktitle",
-        "callNumber": "call-number",
-        "code": "booktitle",
-        "codeNumber": "volume",
-        "codePages": "pages",
-        "codeVolume": "volume",
-        "conferenceName": "event",
-        "court": "authority",
-        "date": "issued",
-        "issueDate": "issued",
-        "dictionaryTitle": "booktitle",
-        "distributor": "publisher",
-        "encyclopediaTitle": "booktitle",
-        "extra": "note",
-        "filingDate": "submitted",
-        "forumTitle": "booktitle",
-        "genre": "type",
-        "history": "references",
-        "institution": "publisher",
-        "interviewMedium": "medium",
-        "issue": "number",
-        "issuingAuthority": "authority",
-        "legalStatus": "status",
-        "legislativeBody": "authority",
-        "libraryCatalog": "source",
-        "meetingName": "event",
-        "numPages": "pages",
-        "numberOfVolumes": "volume",
-        "place": "address",
-        "priorityNumbers": "issue",
-        "proceedingsTitle": "booktitle",
-        "programTitle": "booktitle",
-        "programmingLanguage": "type",
-        "publicationTitle": "booktitle",
-        "reporter": "booktitle",
-        "runningTime": "dimensions",
-        "seriesNumber": "number",
-        "session": "chapter-number",
-        "shortTitle": "shorttitle",
-        "system": "medium",
-        "thesisType": "type",
-        "university": "publisher",
-        "url": "URL",
-        "versionNumber": "version",
-        "websiteTitle": "booktitle",
-        "websiteType": "type",
-    }
 
     _creators = [
         "editor",
@@ -232,30 +43,6 @@ class ZoteroEntries:
         else:
             self._ypsep = ", p. "
 
-        # Template for citation keys
-        if os.getenv("ZCitationTemplate") is not None:
-            self._cite = str(os.getenv("ZCitationTemplate"))
-        else:
-            self._cite = "{Authors}_{Year}"
-
-        # Title words to be ignored
-        if os.getenv("ZBannedWords") is not None:
-            self._bwords = str(os.getenv("ZBannedWords")).split()
-        else:
-            self._bwords = [
-                "a",
-                "an",
-                "the",
-                "some",
-                "from",
-                "on",
-                "in",
-                "to",
-                "of",
-                "do",
-                "with",
-            ]
-
         # Path to zotero.sqlite
         self._get_zotero_prefs()
         if os.getenv("ZoteroSQLpath") is None:
@@ -282,19 +69,30 @@ class ZoteroEntries:
                 return None
 
         # Path to better-bibtex-search.sqlite
-        self._use_bbt = False
-        if os.getenv("BetterBibtexSQLpath") is not None:
+        if os.getenv("BetterBibtexSQLpath") is None:
+            if os.path.isfile(os.path.expanduser("~/Zotero/better-bibtex.sqlite")):
+                self._b = os.path.expanduser("~/Zotero/better-bibtex.sqlite")
+            elif os.getenv("USERPROFILE") is not None and os.path.isfile(
+                str(os.getenv("USERPROFILE")) + "/Zotero/better-bibtex.sqlite"
+            ):
+                self._b = str(os.getenv("USERPROFILE")) + "/Zotero/better-bibtex.sqlite"
+            else:
+                self._errmsg(
+                    "The file better-bibtex.sqlite was not found. Please, define the environment variable BetterBibtexSQLpath."
+                )
+                return None
+        else:
             if os.path.isfile(
                 os.path.expanduser(str(os.getenv("BetterBibtexSQLpath")))
             ):
                 self._b = os.path.expanduser(str(os.getenv("BetterBibtexSQLpath")))
-                self._use_bbt = True
             else:
                 self._errmsg(
                     'Please, check if $BetterBibtexSQLpath is correct: "'
                     + str(os.getenv("BetterBibtexSQLpath"))
                     + '" not found.'
                 )
+                return None
 
         # Temporary directory
         if os.getenv("Zotcite_tmpdir") is None:
@@ -325,12 +123,6 @@ class ZoteroEntries:
                 + '" is not writable.'
             )
             return None
-
-        # Fields that should not be added to the YAML references:
-        if os.getenv("Zotcite_exclude") is None:
-            self._exclude = []
-        else:
-            self._exclude = str(os.getenv("Zotcite_exclude")).split()
 
         self._c = {}
         self._e = {}
@@ -432,18 +224,21 @@ class ZoteroEntries:
         return bcopy
 
     def _load_zotero_data(self):
+        # setup the database
         zcopy = self._copy_zotero_data()
         bcopy = self._copy_betterbibtex_data()
         conn = sqlite3.connect(zcopy)
         self._cur = conn.cursor()
+        # attach BetterBibTeX database to Zotero database
         bbt_query = f'ATTACH DATABASE "{bcopy}" as betterbibtex'
         self._cur.execute(bbt_query)
+
         self._get_collections()
         self._add_most_fields()
         self._add_authors()
         self._add_type()
         self._add_attachments()
-        self._calculate_citekeys()
+        self._add_year()
         self._delete_items()
         conn.close()
 
@@ -489,6 +284,10 @@ class ZoteroEntries:
                     "citekey": citekey,
                 }
             self._e[item_id][field] = value
+
+        for k in self._e:
+            if "title" not in self._e[k]:
+                self._e[k]["title"] = ""
 
     def _add_authors(self):
         query = """
@@ -553,8 +352,7 @@ class ZoteroEntries:
                 else:
                     self._e[pId]["attachment"] = [pKey + ":" + aPath]
 
-    def _calculate_citekeys(self):
-        ptrn = "^(" + " |".join(self._bwords) + " )"
+    def _add_year(self):
         for k in self._e:
             if "date" in self._e[k]:
                 year = re.sub(" .*", "", self._e[k]["date"]).split("-")[0]
@@ -564,44 +362,6 @@ class ZoteroEntries:
                 else:
                     year = ""
             self._e[k]["year"] = year
-            if "title" in self._e[k]:
-                title = re.sub(ptrn, "", self._e[k]["title"].lower())
-                title = re.sub("^[a-z] ", "", title)
-                titlew = re.sub("[ ,;:\\.!?].*", "", title)
-            else:
-                self._e[k]["title"] = ""
-                titlew = ""
-            if "citekey" in self._e[k]:
-                continue
-            lastname = "No_author"
-            lastnames = ""
-            creators = ["author"] + self._creators
-            for c in creators:
-                if c in self._e[k]:
-                    lastname = self._e[k][c][0][0]
-                    for ln in self._e[k][c]:
-                        lastnames = lastnames + "_" + ln[0]
-                    break
-            if lastnames == "":
-                lastnames = "No_author"
-
-            lastnames = re.sub("^_", "", lastnames)
-            lastnames = re.sub("_.*_.*_.*", "_etal", lastnames)
-            lastname = re.sub("\\W", "", lastname)
-            titlew = re.sub("\\W", "", titlew)
-            key = self._cite
-            key = key.replace("{author}", lastname.lower(), 1)
-            key = key.replace("{Author}", lastname.title(), 1)
-            key = key.replace("{authors}", lastnames.lower(), 1)
-            key = key.replace("{Authors}", lastnames.title(), 1)
-            key = key.replace("{year}", re.sub("^[0-9][0-9]", "", year), 1)
-            key = key.replace("{Year}", year, 1)
-            key = key.replace("{title}", titlew.lower(), 1)
-            key = key.replace("{Title}", titlew.title(), 1)
-            key = key.replace(" ", "")
-            key = key.replace("-", "")
-            key = key.replace("'", "")
-            self._e[k]["citekey"] = key
 
     def _delete_items(self):
         self._cur.execute("SELECT itemID FROM deletedItems")
@@ -630,7 +390,7 @@ class ZoteroEntries:
     # @classmethod
     def _get_compl_line(self, e):
         alastnm = e["alastnm"]
-        key = e["citekey"] if self._use_bbt else e["zotkey"] + "#" + e["citekey"]
+        key = e["citekey"]
         if alastnm == "":
             lst = [key, "", "(" + e["year"] + ") " + e["title"]]
         else:
@@ -697,209 +457,6 @@ class ZoteroEntries:
                 p6.append(self._get_compl_line(self._e[k]))
         resp = p1 + p2 + p3 + p4 + p5 + p6
         return resp
-
-    def _sanitize_yaml(self, s):
-        txt = re.sub("\\\\", "\\\\\\\\", s)
-        txt = re.sub('"', '\\\\"', txt)
-        txt = re.sub("@", "\\\\\\\\@", txt)
-        txt = re.sub("\n", "\\\\n", txt)
-        return txt
-
-    def _get_yaml_ref(self, entry, citekey):
-        e = copy.deepcopy(entry)
-
-        # Fix the type
-        if e["etype"] in self._zct:
-            e["etype"] = e["etype"].replace(e["etype"], self._zct[e["etype"]])
-
-        # https://www.zotero.org/support/kb/item_types_and_fields#item_creators
-        # Fix author type:
-        atype = [
-            "artist",
-            "performer",
-            "director",
-            "podcaster",
-            "cartographer",
-            "programmer",
-            "presenter",
-            "interviewee",
-            "sponsor",
-            "inventor",
-        ]
-        for a in atype:
-            if a in e and not "author" in e:
-                e["author"] = e.pop(a)
-
-        # Rename some fields
-        ekeys = list(e.keys())
-        for f in ekeys:
-            if f in self._zcf:
-                e[self._zcf[f]] = e.pop(f)
-
-        ref = '  - type: "' + e["etype"] + '"\n    id: "' + citekey + '"\n'
-        atype = [
-            "author",
-            "editor",
-            "collection-editor",
-            "translator",
-            "reviewed-author",
-            "composer",
-            "interviewer",
-            "recipient",
-        ]
-        for aa in atype:
-            if aa in e:
-                ref += "    " + aa + ":\n"
-                for last, first in e[aa]:
-                    ref += '      - family: "' + self._sanitize_yaml(last) + '"\n'
-                    ref += '        given: "' + self._sanitize_yaml(first) + '"\n'
-        if "issued" in e:
-            d = re.sub(" .*", "", e["issued"]).split("-")
-            if d[0] != "0000":
-                ref += '    issued:\n      - year: "' + e["year"] + '"\n'
-                if d[1] != "00":
-                    ref += '        month: "' + d[1] + '"\n'
-                if d[2] != "00":
-                    ref += '        day: "' + d[2] + '"\n'
-        dont = (
-            [
-                "etype",
-                "issued",
-                "abstract",
-                "citekey",
-                "zotkey",
-                "collection",
-                "alastnm",
-                "container-author",
-                "year",
-            ]
-            + self._exclude
-            + atype
-        )
-        for f in e:
-            if f not in dont:
-                ref += "    " + f + ': "' + self._sanitize_yaml(str(e[f])) + '"\n'
-        return ref
-
-    def GetYamlRefs(self, keys):
-        """Build a dummy Markdown document with the references in the YAML header
-
-        keys (list): List of citation keys (not Zotero keys) present in the document.
-        """
-
-        ref = ""
-        for e in self._e:
-            for k in keys:
-                zotkey = re.sub("#.*", "", k)
-                if zotkey in [self._e[e]["zotkey"], self._e[e]["citekey"]]:
-                    ref += self._get_yaml_ref(self._e[e], k)
-        if ref != "":
-            ref = "references:\n" + ref
-        return ref
-
-    def _get_bib_ref(self, entry, citekey):
-        e = copy.deepcopy(entry)
-
-        # Fix the type
-        if e["etype"] in self._zbt:
-            e["etype"] = e["etype"].replace(e["etype"], self._zbt[e["etype"]])
-
-        # Escape quotes of all fields
-        for f in e:
-            if isinstance(e[f], str):
-                e[f] = re.sub('"', '\\"', e[f])
-
-        # Rename some fields
-        ekeys = list(e.keys())
-        for f in ekeys:
-            if f in self._zbf:
-                e[self._zbf[f]] = e.pop(f)
-
-        if e["etype"] == "Article" and "booktitle" in e:
-            e["journal"] = e.pop("booktitle")
-        if e["etype"] == "InCollection" and not "editor" in e:
-            e["etype"] = "InBook"
-
-        for aa in [
-            "title",
-            "journal",
-            "booktitle",
-            "journalAbbreviation",
-            "address",
-            "publisher",
-        ]:
-            if aa in e:
-                # Avoid compilation errors
-                e[aa] = re.sub('\\\\"', '"', e[aa])
-                e[aa] = re.sub("\\\\", "\x01", e[aa])
-                e[aa] = re.sub("([&%$#_\\[\\]\\{\\}])", "\\\\\\1", e[aa])
-                e[aa] = re.sub("\x01", "{\\\\textbackslash}", e[aa])
-                # https://www.zotero.org/support/kb/rich_text_bibliography
-                e[aa] = re.sub("<i>(.+?)</i>", "\\\\textit{\\1}", e[aa])
-                e[aa] = re.sub("<b>(.+?)</b>", "\\\\textbf{\\1}", e[aa])
-                e[aa] = re.sub("<sub>(.+?)</sub>", "$_{\\\\textrm{\\1}}$", e[aa])
-                e[aa] = re.sub("<sup>(.+?)</sup>", "$^{\\\\textrm{\\1}}$", e[aa])
-                e[aa] = re.sub(
-                    '<span style="font-variant:small-caps;">(.+?)</span>',
-                    "\\\\textsc{\\1}",
-                    e[aa],
-                )
-                e[aa] = re.sub('<span class="nocase">(.+?)</span>', "{\\1}", e[aa])
-
-        ref = ["\n@" + e["etype"] + "{" + re.sub("#.*", "", citekey) + ",\n"]
-        for aa in ["author", "editor", "contributor", "translator", "container-author"]:
-            if aa in e:
-                names = []
-                ref.append("  " + aa + " = {")
-                for last, first in e[aa]:
-                    names.append(last + ", " + first)
-                ref.append(" and ".join(names) + "},\n")
-        if "issued" in e:
-            d = re.sub(" .*", "", e["issued"]).split("-")
-            if d[0] != "0000":
-                ref.append("  year = {" + e["year"] + "},\n")
-                if d[1] != "00":
-                    ref.append("  month = {" + d[1] + "},\n")
-                if d[2] != "00":
-                    ref.append("  day = {" + d[2] + "},\n")
-        if "urldate" in e:
-            e["urldate"] = re.sub(" .*", "", e["urldate"])
-        if "pages" in e:
-            e["pages"] = re.sub("([0-9])-([0-9])", "\\1--\\2", e["pages"])
-        dont = [
-            "etype",
-            "issued",
-            "abstract",
-            "citekey",
-            "zotkey",
-            "collection",
-            "author",
-            "editor",
-            "contributor",
-            "translator",
-            "alastnm",
-            "container-author",
-            "year",
-        ]
-        for f in e:
-            if f not in dont:
-                ref.append("  " + f + " = {" + str(e[f]) + "},\n")
-        ref.append("}\n")
-        return ref
-
-    def GetBib(self, keys):
-        """Build the contents of a .bib file
-
-        keys (list): List of citation keys (not Zotero keys) present in the document.
-        """
-
-        ref = {}
-        for e in self._e:
-            for k in keys:
-                zotkey = re.sub("#.*", "", k)
-                if zotkey in [self._e[e]["zotkey"], self._e[e]["citekey"]]:
-                    ref[zotkey] = self._get_bib_ref(self._e[e], k)
-        return ref
 
     def GetAttachment(self, zotkey):
         """Tell Vim what attachment is associated with the citation key
@@ -1099,32 +656,6 @@ class ZoteroEntries:
 
         return notes + "\n"
 
-    def GetYamlField(self, key, lines):
-        l2 = []
-        for l in lines:
-            if l.find("!expr") < 0:
-                l2.append(l)
-        if len(l2) == 0:
-            return []
-        try:
-            y = yaml.load("\n".join(l2), yaml.SafeLoader)
-        except yaml.YAMLError as exc:
-            if hasattr(exc, "problem_mark"):
-                mark = getattr(exc, "problem_mark")
-                self._errmsg(
-                    "YAML error (line "
-                    + str(mark.line + 1)
-                    + ", column "
-                    + str(mark.column)
-                    + "): "
-                    + lines[mark.line]
-                )
-                return []
-        else:
-            if key in y.keys():
-                return y[key]
-        return []
-
     def Info(self):
         """Return information that might be useful for users of ZoteroEntries"""
 
@@ -1133,11 +664,9 @@ class ZoteroEntries:
             "data dir": self._dd,
             "attachments dir": self._ad,
             "zotero.sqlite": self._z,
+            "better-bibtex.sqlite": self._b,
             "tmpdir": self._tmpdir,
             "references found": len(self._e.keys()),
             "docs": str(self._d) + "\n",
-            "citation template": self._cite,
-            "banned words": " ".join(self._bwords),
-            "excluded fields": str(self._exclude),
         }
         return r

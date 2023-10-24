@@ -93,10 +93,6 @@ function zotcite#CompleteBib(findstart, base)
     endif
 endfunction
 
-function zotcite#Py3Compl(citeptrn)
-    return py3eval('ZotCite.GetMatch("'. a:citeptrn .'", "'. escape(expand("%:p"), '\\') .'")')
-endfunction
-
 function zotcite#getmach(key)
     let citeptrn = substitute(a:key, ' .*', '', '')
     let refs = py3eval('ZotCite.GetMatch("'. citeptrn .'", "'. escape(expand("%:p"), '\\') .'")')
@@ -193,19 +189,6 @@ function zotcite#GetCitationKey()
         return wrd
     endif
     return ''
-endfunction
-
-function zotcite#GetYamlRef()
-    let wrd = zotcite#GetCitationKey()
-    if wrd != ''
-        let repl = py3eval('ZotCite.GetYamlRefs(["' . wrd . '"])')
-        let repl = substitute(repl, "^references:[\n\r]*", '', '')
-        if repl == ''
-            call zotcite#warning('Citation key not found')
-        else
-            echo repl
-        endif
-    endif
 endfunction
 
 function zotcite#GetReferenceData(type)
@@ -333,34 +316,6 @@ function zotcite#OpenAttachment()
     endif
 endfunction
 
-function zotcite#ViewDocument()
-    if &filetype == 'quarto'
-        let fmt = zotcite#GetYamlField('format')
-    else
-        let fmt = zotcite#GetYamlField('output')
-    endif
-    while len(fmt) && type(fmt) != v:t_string
-        if type(fmt) == v:t_dict
-            let fmt = keys(fmt)[0]
-        elseif type(fmt) == v:t_list
-            let fmt = fmt[0]
-        else
-            return
-        endif
-    endwhile
-    if type(fmt) == v:t_list && fmt == []
-        let fmt = 'html'
-    endif
-    if fmt == 'pdf' || fmt == 'beamer' || fmt == 'pdf_document'
-        let out = system(s:open_cmd . ' "' . expand('%:p:r') . '.pdf"')
-    elseif fmt == 'html' || fmt == 'revealjs' || fmt == 'html_document'
-        let out = system(s:open_cmd . ' "' . expand('%:p:r') . '.html"')
-    endif
-    if v:shell_error
-        call zotcite#warning(substitute(out, '\n', ' ', 'g'))
-    endif
-endfunction
-
 function zotcite#GetPDFNote(key)
     let zotkey = zotcite#FindCitationKey(a:key)
     if zotkey == ''
@@ -390,43 +345,6 @@ function zotcite#GetPDFNote(key)
             call zotcite#warning(notes)
         endif
     endif
-endfunction
-
-function zotcite#AddYamlRefs()
-    let bigstr = join(getline(1, '$'))
-    let bigstr = substitute(bigstr, '.\{-}\(@[A-Z0-9]\{8}#[[:alnum:]à-öø-ÿÀ-ÖØ-ß_:\-]\+\).\{-}', ' \1 ', 'g')
-    let bigstr = substitute(bigstr, '\(.*@[A-Z0-9]\{8}#[[:alnum:]à-öø-ÿÀ-ÖØ-ß_:\-]\+\) .*', '\1', 'g')
-    let bigstr = substitute(bigstr, '@', '', 'g')
-    let rlist = uniq(sort(split(bigstr)))
-    exe 'let refs = py3eval("ZotCite.GetYamlRefs(' . string(rlist) . ')")'
-    let rlines = split(refs, "\n")
-    call append(line('.'), rlines)
-endfunction
-
-function zotcite#GetYamlField(field)
-    if getline(1) != '---'
-        return []
-    endif
-    let lastl = line('$')
-    let idx = 2
-    let lines = []
-    while idx < lastl
-        let line = getline(idx)
-        if line == '...' || line == '---'
-            let lines = getline(2, idx - 1)
-            break
-        endif
-        let idx += 1
-    endwhile
-    if len(lines) == 0
-        return []
-    endif
-    call map(lines, "substitute(v:val, '\\', '\\\\\\', 'g')")
-    let repl = py3eval('ZotCite.GetYamlField("' . a:field . '", ' . string(lines) . ')')
-    if type(repl) == v:t_number && repl == -1
-        return []
-    endif
-    return repl
 endfunction
 
 if has('nvim')
@@ -481,52 +399,6 @@ function zotcite#Pulse(...)
     endif
 endfunction
 
-function zotcite#QuartoPostWrite()
-    if s:quarto_running
-        call zotcite#warning('Quarto is still running')
-        return
-    endif
-    let s:quarto_output = []
-    if exists('g:zotcite_quarto_render')
-        if type(g:zotcite_quarto_render) == v:t_number
-            if g:zotcite_quarto_render
-                let qcmd = 'quarto render ' . expand('%')
-            else
-                return
-            endif
-        elseif type(g:zotcite_quarto_render) == v:t_string
-            let qcmd = 'quarto render ' . expand('%') . ' ' . g:zotcite_quarto_render
-        endif
-        let s:quarto_running = 1
-        if has('nvim')
-            call jobstart(qcmd, s:jobcb)
-        else
-            call job_start(qcmd, s:jobcb)
-        endif
-        call timer_start(500, 'zotcite#Pulse')
-    endif
-endfunction
-
-function zotcite#GetCollectionName(run_quarto)
-    let newc = zotcite#GetYamlField('collection')
-    if len(newc) == 0
-        return
-    endif
-    if type(newc) == v:t_string
-        let newc = [newc]
-    endif
-    if !exists('b:zotcite_cllctn') || newc != b:zotcite_cllctn
-        let b:zotcite_cllctn = newc
-        let repl = py3eval('ZotCite.SetCollections("' . escape(expand("%:p"), '\\') . '", ' . string(b:zotcite_cllctn) . ')')
-        if repl != ''
-            call zotcite#warning(repl)
-        endif
-    endif
-    if &filetype == 'quarto' && a:run_quarto
-        call zotcite#QuartoPostWrite()
-    endif
-endfunction
-
 function zotcite#SetPath()
     if has("win32")
         let zpath = substitute(s:zotcite_home, '/', '\\', 'g')
@@ -537,36 +409,6 @@ function zotcite#SetPath()
         if $PATH !~ s:zotcite_home
             let $PATH = s:zotcite_home . ':' . $PATH
         endif
-    endif
-endfunction
-
-function zotcite#ODTtoMarkdown(odt)
-    call zotcite#SetPath()
-    let mdf = system("odt2md.py '" . a:odt . "'")
-    if v:shell_error
-        call zotcite#warning(substitute(mdf, '\n', ' ', 'g'))
-    else
-        exe 'tabnew ' . mdf
-    endif
-endfunction
-
-function zotcite#CheckBib()
-    let bibf = zotcite#GetYamlField('bibliography')
-    if type(bibf) == v:t_list
-        if len(bibf) == 0
-            return
-        endif
-        let bibf = bibf[0]
-    endif
-    if type(bibf) != v:t_string
-        call zotcite#warning('Invalid "bibliography" field: ' . bibf)
-        sleep 1
-        return
-    endif
-
-    if bibf =~ '.*zotcite.bib$' && !filereadable(bibf)
-        " Ensure that `quarto preview` will work
-        call writefile([], bibf)
     endif
 endfunction
 
@@ -617,15 +459,10 @@ function zotcite#GlobalInit()
     endif
     unlet s:uname
 
-    command Zrefs call zotcite#AddYamlRefs()
     command -nargs=1 Zseek call zotcite#Seek(<q-args>)
     command -nargs=1 Znote call zotcite#GetNote(<q-args>)
     command -nargs=+ Zannotations call zotcite#GetAnnotations(<q-args>)
     command -nargs=1 Zpdfnote call zotcite#GetPDFNote(<q-args>)
-
-    " 2019-03-17:
-    command ZRefs call zotcite#warning('The command :ZRefs was renamed as :Zrefs') | delcommand ZRefs
-    command -nargs=1 ZSeek call zotcite#warning('The command :ZSeek was renamed as :Zseek') | delcommand ZSeek
     return 1
 endfunction
 
@@ -657,11 +494,6 @@ function zotcite#Init(...)
         else
             nnoremap <buffer><silent> <Leader>zo :call zotcite#OpenAttachment()<cr>
         endif
-        if hasmapto('<Plug>ZViewDocument', 'n')
-            exec 'nnoremap <buffer><silent> <Plug>ZViewDocument :call zotcite#ViewDocument()<cr>'
-        else
-            nnoremap <buffer><silent> <Leader>zv :call zotcite#ViewDocument()<cr>
-        endif
         if hasmapto('<Plug>ZCitationInfo', 'n')
             exec 'nnoremap <buffer><silent> <Plug>ZCitationInfo :call zotcite#GetReferenceData("ayt")<cr>'
         else
@@ -671,11 +503,6 @@ function zotcite#Init(...)
             exec 'nnoremap <buffer><silent> <Plug>ZCitationCompleteInfo :call zotcite#GetReferenceData("raw")<cr>'
         else
             nnoremap <buffer><silent> <Leader>za :call zotcite#GetReferenceData("raw")<cr>
-        endif
-        if hasmapto('<Plug>ZCitationYamlRef', 'n')
-            exec 'nnoremap <buffer><silent> <Plug>ZCitationYamlRef :call zotcite#GetYamlRef()<cr>'
-        else
-            nnoremap <buffer><silent> <Leader>zy :call zotcite#GetYamlRef()<cr>
         endif
         if exists('g:zotcite_conceallevel')
             exe 'set conceallevel=' . g:zotcite_conceallevel
@@ -695,9 +522,6 @@ function zotcite#Init(...)
         if !exists('b:rplugin_non_r_omnifunc')
             setlocal omnifunc=zotcite#CompleteBib
         endif
-        call zotcite#GetCollectionName(0)
-        autocmd BufWritePre <buffer> call zotcite#CheckBib()
-        autocmd BufWritePost <buffer> call zotcite#GetCollectionName(1)
     endif
 endfunction
 

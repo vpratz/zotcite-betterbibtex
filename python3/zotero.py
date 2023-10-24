@@ -283,18 +283,16 @@ class ZoteroEntries:
 
         # Path to better-bibtex-search.sqlite
         self._use_bbt = False
-        if os.getenv("BetterBibtexSearchSQLpath") is not None:
+        if os.getenv("BetterBibtexSQLpath") is not None:
             if os.path.isfile(
-                os.path.expanduser(str(os.getenv("BetterBibtexSearchSQLpath")))
+                os.path.expanduser(str(os.getenv("BetterBibtexSQLpath")))
             ):
-                self._b = os.path.expanduser(
-                    str(os.getenv("BetterBibtexSearchSQLpath"))
-                )
+                self._b = os.path.expanduser(str(os.getenv("BetterBibtexSQLpath")))
                 self._use_bbt = True
             else:
                 self._errmsg(
-                    'Please, check if $BetterBibtexSearchSQLpath is correct: "'
-                    + str(os.getenv("BetterBibtexSearchSQLpath"))
+                    'Please, check if $BetterBibtexSQLpath is correct: "'
+                    + str(os.getenv("BetterBibtexSQLpath"))
                     + '" not found.'
                 )
 
@@ -417,10 +415,29 @@ class ZoteroEntries:
                 f.write(b)
         return zcopy
 
+    def _copy_betterbibtex_data(self):
+        self._btime = os.path.getmtime(self._b)
+        bcopy = self._tmpdir + "/copy_of_better_bibtex.sqlite"
+        if os.path.isfile(bcopy):
+            bcopy_time = os.path.getmtime(bcopy)
+        else:
+            bcopy_time = 0
+
+        # Make a copy of zotero.sqlite to avoid locks
+        if self._btime > bcopy_time:
+            with open(self._b, "rb") as f:
+                b = f.read()
+            with open(bcopy, "wb") as f:
+                f.write(b)
+        return bcopy
+
     def _load_zotero_data(self):
         zcopy = self._copy_zotero_data()
+        bcopy = self._copy_betterbibtex_data()
         conn = sqlite3.connect(zcopy)
         self._cur = conn.cursor()
+        bbt_query = f'ATTACH DATABASE "{bcopy}" as betterbibtex'
+        self._cur.execute(bbt_query)
         self._get_collections()
         self._add_most_fields()
         self._add_authors()
@@ -453,46 +470,25 @@ class ZoteroEntries:
             self._c[item_collection].append(item_id)
 
     def _add_most_fields(self):
-        if self._use_bbt:
-            bbt_query = f'ATTACH DATABASE "{self._b}" as bbt'
-            self._cur.execute(bbt_query)
-            query = """
-                SELECT items.itemID, items.key, fields.fieldName, itemDataValues.value, bbt.citekeys.citekey
-                FROM items, itemData, fields, itemDataValues, bbt.citekeys
-                WHERE
-                    items.itemID = itemData.itemID
-                    and itemData.fieldID = fields.fieldID
-                    and itemData.valueID = itemDataValues.valueID
-                    and bbt.citekeys.itemKey = items.key
-                """
-            self._e = {}
-            self._cur.execute(query)
-            for item_id, item_key, field, value, citekey in self._cur.fetchall():
-                if item_id not in self._e:
-                    self._e[item_id] = {
-                        "zotkey": item_key,
-                        "alastnm": "",
-                        "citekey": citekey,
-                    }
-                self._e[item_id][field] = value
-        else:
-            query = """
-                SELECT items.itemID, items.key, fields.fieldName, itemDataValues.value
-                FROM items, itemData, fields, itemDataValues
-                WHERE
-                    items.itemID = itemData.itemID
-                    and itemData.fieldID = fields.fieldID
-                    and itemData.valueID = itemDataValues.valueID
-                """
-            self._e = {}
-            self._cur.execute(query)
-            for item_id, item_key, field, value in self._cur.fetchall():
-                if item_id not in self._e:
-                    self._e[item_id] = {
-                        "zotkey": item_key,
-                        "alastnm": "",
-                    }
-                self._e[item_id][field] = value
+        query = """
+            SELECT items.itemID, items.key, fields.fieldName, itemDataValues.value, betterbibtex.citationkey.citationKey
+            FROM items, itemData, fields, itemDataValues, betterbibtex.citationkey
+            WHERE
+                items.itemID = itemData.itemID
+                and itemData.fieldID = fields.fieldID
+                and itemData.valueID = itemDataValues.valueID
+                and betterbibtex.citationkey.itemKey = items.key
+            """
+        self._e = {}
+        self._cur.execute(query)
+        for item_id, item_key, field, value, citekey in self._cur.fetchall():
+            if item_id not in self._e:
+                self._e[item_id] = {
+                    "zotkey": item_key,
+                    "alastnm": "",
+                    "citekey": citekey,
+                }
+            self._e[item_id][field] = value
 
     def _add_authors(self):
         query = """
@@ -912,7 +908,7 @@ class ZoteroEntries:
         """
 
         for k in self._e:
-            if self._e[k]["zotkey"] == zotkey:
+            if zotkey in [self._e[k]["zotkey"], self._e[k]["citekey"]]:
                 if "attachment" in self._e[k]:
                     return self._e[k]["attachment"]
                 return ["nOaTtAChMeNt"]

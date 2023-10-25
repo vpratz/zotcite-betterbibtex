@@ -12,3 +12,13 @@ repos:
     rev: 23.10.1
     hooks:
     -   id: black
+-   repo: https://github.com/vpratz/panvimdoc
+    rev: c2c9e24
+    hooks:
+    -   id: panvimdoc
+        files: ^doc/zotcite\.md
+        args:
+        - --project-name
+        - zotcite
+        - --input-file
+        - doc/zotcite.md
